@@ -74,7 +74,7 @@ loop {
 |------------------|-------|---------|----------------|--------|
 | `position_gain`  | `f32` | `1/s`   | `2.40`         | Feedback gain from baro residual into the altitude state. Larger → tighter tracking of baro, more baro noise visible in altitude. |
 | `velocity_gain`  | `f32` | `1/s²`  | `2.88`         | Feedback gain from baro residual into the velocity state. Damps integrated-acceleration drift in `v`. |
-| `bias_gain`      | `f32` | `1/s³`  | `0.675`        | Feedback gain from baro residual into the accel-bias state. Sets the bias-loop bandwidth (`ω_b ≈ bias_gain / velocity_gain`). Set to `0.0` to disable bias estimation (recovers a 2-state filter). |
+| `bias_gain`      | `f32` | `1/s³`  | `0.675`        | Feedback gain from baro residual into the accel-bias state. Sets the bias-loop bandwidth (`ω_b ≈ bias_gain / velocity_gain`). Set to `0.0` to disable bias estimation. |
 
 The three gains define the observer's characteristic polynomial `s³ + position_gain·s² + velocity_gain·s + bias_gain`. Stability (Routh-Hurwitz) requires `position_gain · velocity_gain > bias_gain`. The defaults target a VTOL multirotor with ~1 s position settling and ~10 s bias settling. See the next section to retune.
 
@@ -114,11 +114,11 @@ Position `τ` is the error-envelope decay constant; 2% settling ≈ `4τ`. Bias 
 - **Loop separation** — keep `ω_b ≲ ω / 5` so the bias loop doesn't fight the position/velocity transient.
 - **Noise bound** — the baro path is low-pass with corner ≈ `ω`. Higher `ω` admits more baro noise into altitude. Pick the lowest `ω` that meets your controller's bandwidth requirement.
 
-### What changed: bias is now estimated, not parked
+### Bias estimation: tradeoffs
 
-The previous 2-state filter parked at a steady-state altitude error of `+a_bias / velocity_gain` (≈ +5 cm for a 12 mg Z accel bias with the old `velocity_gain = 2.25`). The 3-state observer drives that error to **zero** by identifying the bias as a state.
+Estimating the bias as a state drives the steady-state altitude error from a constant accel bias to **zero**. Without it (`bias_gain = 0.0`), the filter parks at `+a_bias / velocity_gain` — about +5 cm for a 12 mg Z accel bias with the default `velocity_gain`.
 
-The cost is a slower initial transient: the bias loop takes ~`3/ω_b` seconds to converge. With defaults that's ~10 s. **Motion does not slow convergence** — the error dynamics are autonomous (the true trajectory cancels between truth and filter), so bias converges normally during any flight regime, hover or otherwise. The "transient" is the cold-filter startup, not a stationary-only requirement. If you cannot tolerate a startup transient at all, set `bias_gain = 0.0` to keep the original 2-state behavior. A warm-start API for `accel_bias` from a stationary pre-flight calibration is on the roadmap; not currently exposed.
+The cost is a slower initial transient: the bias loop takes ~`3/ω_b` seconds to converge. With defaults that's ~10 s. **Motion does not slow convergence** — the error dynamics are autonomous (the true trajectory cancels between truth and filter), so bias converges normally during any flight regime, hover or otherwise. The "transient" is the cold-filter startup, not a stationary-only requirement. If you cannot tolerate a startup transient at all, set `bias_gain = 0.0` to disable bias estimation. A warm-start API for `accel_bias` from a stationary pre-flight calibration is on the roadmap; not currently exposed.
 
 Caveat: AHRS attitude error during sustained pitch/roll couples into the bias estimate (rotation-induced error in `earth_acceleration().z` is indistinguishable from real accel bias to this filter). On a level platform this is zero; on aggressive maneuvers the estimate absorbs a few mg of effective bias. Usually a feature — you want the lumped DC offset gone — but worth knowing.
 
