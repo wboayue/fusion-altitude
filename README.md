@@ -62,6 +62,10 @@ loop {
 
 `AltitudeEstimator::new()` constructs with defaults; `AltitudeEstimator::with_settings(s)` overrides. `reset(baro_altitude)` zeroes the reference explicitly; otherwise the first `update()` call auto-zeroes against the first baro sample.
 
+### Diagnostics
+
+`baro_residual()` returns the baro innovation `baro_altitude - altitude()` from the most recent `update`, sign matching the residual that drove the correction. Useful at the outer loop / autopilot for fault detection (sustained large residual ⇒ baro stuck, prop-wash, or filter divergence), confidence weighting, or innovation-gated handoff to a nav EKF. Zero before the first `update` and immediately after `reset`.
+
 ## Settings
 
 | Setting          | Type  | Units   | Default (VTOL) | Effect |
