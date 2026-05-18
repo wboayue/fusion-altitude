@@ -53,6 +53,11 @@ h += (v + position_gain * residual) * dt    # uses the just-updated v
 
 State: `altitude`, `velocity`, `reference_set` flag (auto-zero on first sample if `reset()` not called).
 
+### Tuning notes
+
+- **Steady-state position error from constant accel bias**: a Z-axis accel bias `a_bias` (m/s²) produces an altitude estimate biased by `e_h ≈ -a_bias / velocity_gain` in steady state. Derivation: the velocity loop holds `velocity_gain · (z - h) = -a_bias`. Verified in `examples/realistic_noise.rs` — a 12 mg accel bias with `velocity_gain = 2.25` gives the observed +5 cm bias to within rounding. Tighter `velocity_gain` shrinks this bias but admits more baro noise.
+- A future runtime accel-bias estimator (or 3-state observer) is the principled fix if this bias dominates.
+
 ### API Shape (matches `fusion-ahrs` conventions)
 
 - `AltitudeEstimator::new()` — defaults
@@ -63,7 +68,16 @@ State: `altitude`, `velocity`, `reference_set` flag (auto-zero on first sample i
 
 ### Integration with `fusion-ahrs`
 
-`fusion-ahrs::Ahrs::earth_acceleration()` returns **g**, not m/s². Multiply by `fusion_altitude::GRAVITY` (= 9.80665) to convert. Sign: positive Z is up under NWU/ENU; negate for NED.
+Sibling-crate I/O units (verified against `fusion-ahrs/src/ahrs.rs` and `testdata/sensor_data.csv`, *not* the README which is misleading):
+
+| API | Units |
+|---|---|
+| `Ahrs::update(gyro, …)` | gyro in **deg/s** (CSV: `Gyroscope X (deg/s)`) — not rad/s as the README zero-vector example comment suggests |
+| `Ahrs::update(_, accel, …)` | accel in **g** (stationary level = `(0, 0, 1)`) |
+| `Ahrs::update(_, _, mag, …)` | mag is a normalised direction |
+| `linear_acceleration()`, `earth_acceleration()` | output in **g**, gravity removed |
+
+For our pipeline: `vertical_accel = ahrs.earth_acceleration().z * fusion_altitude::GRAVITY` under NWU/ENU; negate for NED.
 
 ```rust,ignore
 ahrs.update(gyro, accel, mag, dt);
