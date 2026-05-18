@@ -18,9 +18,10 @@
 //! The 3-state observer identifies the +12 mg Z accel bias as a state and
 //! subtracts it from the measured acceleration, so the steady-state mean
 //! error (which used to park at +a_bias/K_v ≈ +5 cm with the 2-state filter)
-//! is now ~0. The bias loop's ~10 s convergence inflates the initial
-//! transient compared to the 2-state filter; hold position during the
-//! first ~10 s of flight if that matters.
+//! is now ~0. The bias loop's ~10 s convergence inflates the cold-filter
+//! initial transient compared to the 2-state filter, but motion does not
+//! slow convergence — error dynamics are autonomous, so the bias is
+//! identified just as well during normal flight as during hover.
 //!
 //! Reproducible: seeded PCG, fixed sample count.
 //!
