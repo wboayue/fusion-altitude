@@ -18,6 +18,8 @@ exclude = ["CLAUDE.md"]
 criterion = { version = "0.8", features = ["html_reports"] }
 fusion-ahrs = "0.4"
 nalgebra = "0.34"
+rand = "0.10"
+rand_pcg = "0.10"
 
 [[bench]]
 name = "altitude_benchmarks"

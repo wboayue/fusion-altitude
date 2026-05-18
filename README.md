@@ -80,10 +80,11 @@ cargo add fusion-altitude
 ## Examples
 
 ```bash
-cargo run --release --example with_fusion_ahrs
+cargo run --release --example with_fusion_ahrs    # clean signal, ~3 cm steady-state error
+cargo run --release --example realistic_noise     # MEMS-class noise + prop wash, ~6 cm RMS
 ```
 
-End-to-end demo of the `fusion-ahrs` → `fusion-altitude` pipeline using synthetic ±5 m vertical oscillation at 0.1 Hz. After the AHRS init transient (~3 s), altitude tracks truth to within a few cm.
+`with_fusion_ahrs` shows the full `fusion-ahrs` → `fusion-altitude` pipeline on a synthetic ±5 m, 0.1 Hz vertical oscillation. `realistic_noise` adds representative gyro/accel biases, Gaussian sensor noise, and a periodic prop-wash component on the barometer — see the file header for the sensor budget and the predicted/observed error.
 
 ## Development
 

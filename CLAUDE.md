@@ -14,7 +14,8 @@ cargo build --no-default-features   # verify no_std / embedded compatibility
 cargo fmt                           # format (required before commit)
 cargo clippy                        # lint
 cargo bench                         # criterion benchmarks
-cargo run --release --example with_fusion_ahrs   # AHRS → altitude pipeline demo
+cargo run --release --example with_fusion_ahrs   # clean-signal AHRS → altitude demo
+cargo run --release --example realistic_noise    # demo with MEMS-class noise + baro prop wash
 ```
 
 ## Architecture
@@ -75,7 +76,7 @@ let vz = altitude.vertical_velocity();
 ### Dependencies
 - **None** in the core crate. Algorithm is pure scalar `f32` arithmetic (`+`, `-`, `*`, `/`) — no transcendentals, no vector ops, no allocator. Keeps the dependency tree empty and the `no_std` story trivial.
 - Add `nalgebra` (with `libm` feature) only if a future public API takes/returns `Vector3<f32>`; otherwise resist.
-- Dev-deps: `criterion` (benches), `fusion-ahrs` + `nalgebra` (example only — not propagated to crate consumers).
+- Dev-deps: `criterion` (benches), `fusion-ahrs` + `nalgebra` (examples), `rand` + `rand_pcg` (reproducible noise in examples). None propagated to crate consumers.
 
 ### Benchmarks
 
