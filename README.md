@@ -6,9 +6,9 @@
 
 A `no_std`-friendly altitude and vertical-velocity estimator that fuses barometric pressure with gravity-compensated vertical acceleration from an AHRS via a 3rd-order complementary observer, yielding drift-corrected altitude and online accel-bias estimation.
 
-Companion crate to [`fusion-ahrs`](https://github.com/wboayue/fusion-ahrs). Implements the altitude estimator proposed in [fusion-ahrs#27](https://github.com/wboayue/fusion-ahrs/issues/27).
+Companion crate to [`fusion-ahrs`](https://github.com/wboayue/fusion-ahrs).
 
-> Status: early scaffolding. API is not yet stable.
+> Pre-1.0 — API may change before 1.0.
 
 ## Why
 
@@ -118,7 +118,7 @@ Position `τ` is the error-envelope decay constant; 2% settling ≈ `4τ`. Bias 
 
 The previous 2-state filter parked at a steady-state altitude error of `+a_bias / velocity_gain` (≈ +5 cm for a 12 mg Z accel bias with the old `velocity_gain = 2.25`). The 3-state observer drives that error to **zero** by identifying the bias as a state.
 
-The cost is a slower initial transient: the bias loop takes ~`3/ω_b` seconds to converge. With defaults that's ~10 s. **Motion does not slow convergence** — the error dynamics are autonomous (the true trajectory cancels between truth and filter), so bias converges normally during any flight regime, hover or otherwise. The "transient" is the cold-filter startup, not a stationary-only requirement. If you cannot tolerate a startup transient at all, set `bias_gain = 0.0` to keep the original 2-state behavior. A future API for warm-starting `accel_bias` from a stationary pre-flight calibration is tracked in `CLAUDE.md` under Open Design Questions — not currently exposed.
+The cost is a slower initial transient: the bias loop takes ~`3/ω_b` seconds to converge. With defaults that's ~10 s. **Motion does not slow convergence** — the error dynamics are autonomous (the true trajectory cancels between truth and filter), so bias converges normally during any flight regime, hover or otherwise. The "transient" is the cold-filter startup, not a stationary-only requirement. If you cannot tolerate a startup transient at all, set `bias_gain = 0.0` to keep the original 2-state behavior. A warm-start API for `accel_bias` from a stationary pre-flight calibration is on the roadmap; not currently exposed.
 
 Caveat: AHRS attitude error during sustained pitch/roll couples into the bias estimate (rotation-induced error in `earth_acceleration().z` is indistinguishable from real accel bias to this filter). On a level platform this is zero; on aggressive maneuvers the estimate absorbs a few mg of effective bias. Usually a feature — you want the lumped DC offset gone — but worth knowing.
 
@@ -141,7 +141,7 @@ cargo add fusion-altitude
 
 ```bash
 cargo run --release --example with_fusion_ahrs    # clean signal, ~3 cm typical / ~10 cm peak steady-state error
-cargo run --release --example realistic_noise     # MEMS-class noise + prop wash, ~4 cm RMS, ~1 cm mean
+cargo run --release --example realistic_noise     # MEMS-class noise + prop wash, 3.6 cm RMS, 0.9 cm mean
 ```
 
 `with_fusion_ahrs` shows the full `fusion-ahrs` → `fusion-altitude` pipeline on a synthetic ±5 m, 0.1 Hz vertical oscillation. `realistic_noise` adds representative gyro/accel biases, Gaussian sensor noise, and a periodic prop-wash component on the barometer — see the file header for the sensor budget and the observed error.
