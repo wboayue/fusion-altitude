@@ -1,4 +1,5 @@
 [![License:MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Crates.io](https://img.shields.io/crates/v/fusion-altitude.svg)](https://crates.io/crates/fusion-altitude)
 [![Coverage Status](https://coveralls.io/repos/github/wboayue/fusion-altitude/badge.svg?branch=main)](https://coveralls.io/github/wboayue/fusion-altitude?branch=main)
 
 # fusion-altitude
@@ -132,10 +133,7 @@ Caveat: AHRS attitude error during sustained pitch/roll couples into the bias es
 
 ## Installation
 
-Not yet published.
-
 ```bash
-# once released:
 cargo add fusion-altitude
 ```
 
