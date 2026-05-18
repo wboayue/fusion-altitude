@@ -98,9 +98,9 @@ fn settings_default_satisfies_routh_hurwitz() {
 #[test]
 fn estimates_constant_accel_bias_and_zeroes_altitude_error() {
     // Stationary at 0 m with the accelerometer reporting a constant
-    // +0.12 m/s² (~12 mg) bias. The 2-state filter would settle at a
-    // +bias/K_v ≈ +4 cm altitude error; the 3-state observer must
-    // identify the bias and drive altitude error to zero.
+    // +0.12 m/s² (~12 mg) bias. A 2-state filter would settle at a
+    // non-zero steady-state altitude error of +bias/K_v; the 3-state
+    // observer must identify the bias and drive altitude error to zero.
     let mut est = AltitudeEstimator::new();
     let true_bias = 0.12_f32;
 
@@ -120,6 +120,52 @@ fn estimates_constant_accel_bias_and_zeroes_altitude_error() {
         est.accel_bias(),
         true_bias
     );
+}
+
+#[test]
+fn reset_preserves_accel_bias() {
+    // Bias is a physical sensor property, not a function of the altitude
+    // reference frame. Once converged it should survive a reference zero.
+    let mut est = AltitudeEstimator::new();
+    let true_bias = 0.12_f32;
+    for _ in 0..6000 {
+        est.update(true_bias, 0.0, DT);
+    }
+
+    let converged_bias = est.accel_bias();
+    assert!((converged_bias - true_bias).abs() < 0.01);
+
+    est.reset(50.0);
+    assert_eq!(est.accel_bias(), converged_bias);
+    assert_eq!(est.altitude(), 50.0);
+    assert_eq!(est.vertical_velocity(), 0.0);
+}
+
+#[test]
+fn bias_gain_zero_recovers_two_state_filter() {
+    // With bias_gain = 0 the bias state is never updated and the
+    // observer collapses to the original 2-state complementary filter.
+    // A constant accel bias must then park at +bias/K_v steady state.
+    let mut est = AltitudeEstimator::with_settings(AltitudeSettings {
+        position_gain: 2.40,
+        velocity_gain: 2.88,
+        bias_gain: 0.0,
+        ..AltitudeSettings::default()
+    });
+    let true_bias = 0.12_f32;
+
+    for _ in 0..6000 {
+        est.update(true_bias, 0.0, DT);
+    }
+
+    let expected_err = true_bias / 2.88;
+    assert!(
+        (est.altitude() - expected_err).abs() < 0.005,
+        "h={} expected≈{}",
+        est.altitude(),
+        expected_err
+    );
+    assert_eq!(est.accel_bias(), 0.0);
 }
 
 // tiny no_std-friendly sqrt for the damping check

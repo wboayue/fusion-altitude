@@ -112,7 +112,7 @@ Position `τ` is the error-envelope decay constant; 2% settling ≈ `4τ`. Bias 
 
 The previous 2-state filter parked at a steady-state altitude error of `+a_bias / velocity_gain` (≈ +5 cm for a 12 mg Z accel bias with the old `velocity_gain = 2.25`). The 3-state observer drives that error to **zero** by identifying the bias as a state.
 
-The cost is a slower initial transient: the bias loop takes ~`3/ω_b` seconds to converge. With defaults that's ~10 s. If your application can hold position during that window, you get the full benefit; if not, set `bias_gain = 0.0` to keep the original 2-state behavior, or seed `accel_bias` from a stationary pre-flight calibration (currently requires reaching into the struct via a future API — not yet exposed).
+The cost is a slower initial transient: the bias loop takes ~`3/ω_b` seconds to converge. With defaults that's ~10 s. If your application can hold position during that window, you get the full benefit; if not, set `bias_gain = 0.0` to keep the original 2-state behavior. A future API for warm-starting `accel_bias` from a stationary pre-flight calibration is tracked in `CLAUDE.md` under Open Design Questions — not currently exposed.
 
 ### Quick recipe
 
@@ -135,7 +135,7 @@ cargo add fusion-altitude
 ## Examples
 
 ```bash
-cargo run --release --example with_fusion_ahrs    # clean signal, ~3 cm steady-state error
+cargo run --release --example with_fusion_ahrs    # clean signal, ~3 cm typical / ~10 cm peak steady-state error
 cargo run --release --example realistic_noise     # MEMS-class noise + prop wash, ~4 cm RMS, ~1 cm mean
 ```
 

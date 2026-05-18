@@ -13,6 +13,7 @@
 ///
 /// Routh-Hurwitz stability requires `position_gain · velocity_gain > bias_gain`.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
 pub struct AltitudeSettings {
     /// Feedback gain (1/s) from baro residual into the altitude state.
     /// Larger → tighter tracking of the barometer, more noise visible.
