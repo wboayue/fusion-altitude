@@ -18,9 +18,11 @@ pub struct AltitudeSettings {
 
 impl Default for AltitudeSettings {
     /// Tuned for a VTOL multirotor: `ω ≈ 1.5 rad/s` bandwidth, `ζ ≈ 0.7`
-    /// damping. Fast enough for altitude-hold control loops (~1 s settling)
-    /// while rejecting prop-wash baro noise. Retune for slower platforms
-    /// (balloons, fixed-wing) or noisier sensors.
+    /// damping. Error-envelope time constant `τ = 1/(ζω) ≈ 1 s`
+    /// (2% settling ≈ `4τ ≈ 4 s`). Fast enough for altitude-hold control
+    /// loops while rejecting prop-wash baro noise. Retune for slower
+    /// platforms (balloons, fixed-wing) or noisier sensors — see the
+    /// Tuning Guide in `README.md`.
     fn default() -> Self {
         Self {
             position_gain: 2.1,

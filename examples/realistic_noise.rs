@@ -15,9 +15,10 @@
 //!   steady-state max error ≈ 12 cm
 //!   steady-state mean error ≈ +5 cm
 //!
-//! The +5 cm bias is a direct consequence of the Z-axis accel bias: in
-//! steady-state the velocity loop holds `K_v · (z - h) = -a_bias`, so the
-//! position residual is `-a_bias / K_v ≈ -0.118 / 2.25 ≈ -0.052 m`. Tighter
+//! The +5 cm bias follows from the +12 mg Z accel bias: at steady state
+//! `v̇ = 0` forces `K_v · (z - h_hat) = -a_bias`, so with `z = h_true`,
+//!   `e_h ≡ h_hat - h_true = +a_bias / K_v ≈ +0.118 / 2.25 ≈ +0.052 m`.
+//! Sign matches: an upward accel bias drives the estimate upward. Tighter
 //! `velocity_gain` (or runtime accel-bias estimation, future work) reduces it.
 //!
 //! Reproducible: seeded PCG, fixed sample count.

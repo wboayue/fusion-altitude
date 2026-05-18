@@ -55,7 +55,8 @@ State: `altitude`, `velocity`, `reference_set` flag (auto-zero on first sample i
 
 ### Tuning notes
 
-- **Steady-state position error from constant accel bias**: a Z-axis accel bias `a_bias` (m/s²) produces an altitude estimate biased by `e_h ≈ -a_bias / velocity_gain` in steady state. Derivation: the velocity loop holds `velocity_gain · (z - h) = -a_bias`. Verified in `examples/realistic_noise.rs` — a 12 mg accel bias with `velocity_gain = 2.25` gives the observed +5 cm bias to within rounding. Tighter `velocity_gain` shrinks this bias but admits more baro noise.
+- **Steady-state position error from constant accel bias**: a Z-axis accel bias `a_bias` (m/s², +up) produces `e_h ≡ h_hat - h_true ≈ +a_bias / velocity_gain` in steady state. Derivation: `v̇ = 0` forces `velocity_gain · (z - h) = -a_bias`, so `h_hat - h_true = +a_bias / velocity_gain`. Verified in `examples/realistic_noise.rs`: a +12 mg accel bias with `velocity_gain = 2.25` predicts +5.2 cm; observed +5.3 cm. Tighter `velocity_gain` shrinks this bias but admits more baro noise.
+- **Response time** for default VTOL gains (`ω = 1.5, ζ = 0.7`): error-envelope time constant `τ = 1/(ζω) ≈ 1 s`; 2% settling ≈ `4τ ≈ 4 s`. Don't confuse the two.
 - A future runtime accel-bias estimator (or 3-state observer) is the principled fix if this bias dominates.
 
 ### API Shape (matches `fusion-ahrs` conventions)

@@ -84,12 +84,14 @@ velocity_gain = ω²               (1/s²)
 
 ### Bandwidth by platform
 
-| Platform | `ω` (rad/s) | `position_gain` | `velocity_gain` | ~Settling |
+| Platform | `ω` (rad/s) | `position_gain` | `velocity_gain` | Time constant `τ = 1/(ζω)` |
 |---|---|---|---|---|
-| Balloon / very slow | `0.2` | `0.28` | `0.04` | ~15 s |
-| Fixed-wing | `0.5` | `0.70` | `0.25` | ~4 s |
+| Balloon / very slow | `0.2` | `0.28` | `0.04` | ~7 s |
+| Fixed-wing | `0.5` | `0.70` | `0.25` | ~3 s |
 | **VTOL multirotor (default)** | **`1.5`** | **`2.10`** | **`2.25`** | **~1 s** |
 | Aggressive racing | `5.0` | `7.00` | `25.0` | ~0.3 s |
+
+`τ` is the error-envelope decay constant; 2% settling is ≈ `4τ`. Values shown assume `ζ = 0.7`.
 
 ### Practical bounds
 
@@ -99,13 +101,15 @@ velocity_gain = ω²               (1/s²)
 
 ### Bias tradeoff
 
-A constant Z-axis accel bias `a_bias` (m/s²) produces a steady-state altitude bias
+A constant Z-axis accel bias `a_bias` (m/s², positive = up) produces a steady-state altitude bias
 
 ```text
-e_h ≈ -a_bias / velocity_gain
+e_h  ≡  h_hat - h_true  ≈  +a_bias / velocity_gain
 ```
 
-So doubling `velocity_gain` halves accel-bias-driven altitude error — but admits more baro noise. There is no free lunch; this is why `ζ` is held near `0.7–1.0` and `ω` is the real knob. If accel bias dominates your error budget, a runtime accel-bias estimator (or a 3-state filter that estimates bias as a state) is the principled fix, not chasing `velocity_gain` upward.
+Derivation: at steady state `v̇ = 0` forces `velocity_gain · (z - h_hat) = -a_bias`, so with `z = h_true` we get `h_hat = h_true + a_bias / velocity_gain`. Verified by `examples/realistic_noise.rs`: a +12 mg (+0.118 m/s²) Z accel bias with `velocity_gain = 2.25` predicts +5.2 cm; the example observes +5.3 cm.
+
+Doubling `velocity_gain` halves accel-bias-driven altitude error — but admits more baro noise. There is no free lunch; this is why `ζ` is held near `0.7–1.0` and `ω` is the real knob. If accel bias dominates your error budget, a runtime accel-bias estimator (or a 3-state filter that estimates bias as a state) is the principled fix, not chasing `velocity_gain` upward.
 
 ### Quick recipe
 
