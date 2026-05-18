@@ -83,6 +83,14 @@ let vz = altitude.vertical_velocity();
 - Keep `README.md` in sync with public API in the same PR
 - Commit messages: conventional-commit style — `feat(altitude): …`, `fix: …`, `docs: …`, `chore(deps): …`, `fmt: …`
 
+## Design Decisions (locked unless reopened)
+
+- **Separate crate, not a feature of `fusion-ahrs`.** `fusion-ahrs` deliberately tracks the upstream xioTechnologies C library (orientation only). Bundling baro/altitude in — even behind a cargo feature — would muddy that parity boundary and force altitude churn through the AHRS release cycle. Embedded users who only need orientation also keep a smaller surface.
+- **Two-state observer with two gains, not single-alpha complementary.** Output is altitude *and* velocity (two states). A 1-DoF complementary filter only corrects one state; velocity then drifts with accel bias. Two gains (`position_gain`, `velocity_gain`) are physically independent — they set the position and velocity time constants of a 2nd-order observer (`K_h = 2ζω`, `K_v = ω²`). Don't collapse to one parameter.
+- **API mirrors `fusion-ahrs`.** Constructor: `new()` + `with_settings(s)`. Updates return `()`; results via `altitude()` / `vertical_velocity()` accessors — not a return-by-value `AltitudeEstimate` snapshot. Consistency with the sibling crate beats minor ergonomic wins.
+- **Scalar `vertical_accel: f32` input, +up convention.** Caller extracts `.z` from `earth_acceleration()` and negates if using NED. Keeps this crate independent of a `Convention` enum.
+- **Reference handling: auto-zero on first sample, with explicit `reset(baro_altitude)` override.** Absolute altitude is meaningless without a reference; users get something working out of the box, with an escape hatch for known-ground starts.
+
 ## Open Design Questions
 - Filter form: 2-state complementary observer (start here) vs. 2-state Kalman with explicit accel/baro noise models (later, if tuning needs are sensor-specific)
 - Whether to expose intermediate state (baro residual, ground reference) for diagnostics
