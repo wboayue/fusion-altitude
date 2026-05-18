@@ -14,42 +14,58 @@ Companion crate to [`fusion-ahrs`](https://github.com/wboayue/fusion-ahrs). Impl
 
 ## Algorithm
 
-Complementary filter:
+Two-state complementary observer over altitude and vertical velocity:
 
-- **High-pass** filtered integrated vertical acceleration — captures fast changes without baro lag
-- **Low-pass** filtered barometric altitude — anchors the estimate against long-term drift
-- Tunable corner frequency via filter coefficients
+```
+residual = baro_altitude - h
+v += a*dt + velocity_gain * residual
+h += v*dt + position_gain * residual
+```
 
-The vertical acceleration input is expected to be gravity-compensated and in the Earth frame. When paired with `fusion-ahrs`, this is exactly the Z component of `ahrs.earth_acceleration()`.
+- Accel is integrated twice (a → v → h); the baro residual feeds back into **both** states, so velocity also gets drift-corrected — not just altitude.
+- Two independent gains tune the position and velocity time constants separately. Larger gains trust the baro more (faster correction, more noise/lag in the output); smaller gains trust the inertial integration more (smoother, slower to recover from drift).
+
+The vertical acceleration input is expected to be gravity-compensated and in the Earth frame, positive = up. When paired with `fusion-ahrs`, this is the Z component of `ahrs.earth_acceleration()` under NWU/ENU conventions (negate for NED).
 
 ## Usage (planned API)
 
 ```rust
 use fusion_ahrs::Ahrs;
-use fusion_altitude::{AltitudeEstimator, AltitudeSettings};
+use fusion_altitude::AltitudeEstimator;
 
 let mut ahrs = Ahrs::new();
-let mut altitude = AltitudeEstimator::new(AltitudeSettings::default());
+let mut altitude = AltitudeEstimator::new();
+
+// Optionally: altitude.with_settings(custom_settings)
+// Optionally: altitude.reset(initial_baro_altitude);
 
 loop {
     let dt = 0.01; // 100 Hz
 
     ahrs.update(gyro, accel, mag, dt);
-    let vertical_accel = ahrs.earth_acceleration().z; // m/s², Earth frame
+    let vertical_accel = ahrs.earth_acceleration().z; // m/s², Earth frame, +up
     let baro_altitude = read_barometer();              // m
 
-    let est = altitude.update(vertical_accel, baro_altitude, dt);
-    println!("alt = {:.2} m, vz = {:.2} m/s", est.altitude, est.velocity);
+    altitude.update(vertical_accel, baro_altitude, dt);
+
+    println!(
+        "alt = {:.2} m, vz = {:.2} m/s",
+        altitude.altitude(),
+        altitude.vertical_velocity(),
+    );
 }
 ```
 
+`AltitudeEstimator::new()` constructs with defaults; `AltitudeEstimator::with_settings(s)` overrides. `reset(baro_altitude)` zeroes the reference explicitly; otherwise the first `update()` call auto-zeroes against the first baro sample.
+
 ## Settings (planned)
 
-| Setting | Type  | Range     | Typical | Effect |
-|---------|-------|-----------|---------|--------|
-| `alpha` | `f32` | `0.0–1.0` | `~0.98` | Blend weight: `alpha` on integrated vertical acceleration, `1 - alpha` on barometric altitude. Higher → faster response, more drift between baro corrections. Lower → tighter drift correction, more baro noise/lag in the output. |
+| Setting          | Type  | Range     | Typical | Effect |
+|------------------|-------|-----------|---------|--------|
+| `position_gain`  | `f32` | `> 0`     | `~0.3`  | Feedback gain from baro residual into the altitude state. Sets the altitude correction time constant `τ_h ≈ 1 / position_gain`. Larger → tighter tracking of baro, more baro noise visible. |
+| `velocity_gain`  | `f32` | `> 0`     | `~0.05` | Feedback gain from baro residual into the velocity state. Damps integrated-acceleration drift in `v`. Larger → faster velocity correction, more sensitivity to baro noise; smaller → cleaner velocity but slower to recover from accel bias. |
 
-A single parameter keeps the complementary filter at its natural one degree of freedom — the high-pass on accel and low-pass on baro share the same corner, so the two paths sum to unity gain at the crossover.
+The two gains together set a 2nd-order observer; choosing them as `K_h = 2ζω` and `K_v = ω²` (with damping `ζ ≈ 0.7` and bandwidth `ω`) gives a well-behaved critically-near-damped response.
 
 ## Installation
 

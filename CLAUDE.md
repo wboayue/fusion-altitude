@@ -28,26 +28,43 @@ cargo run --example simple          # basic altitude fusion demo
 ```
 src/
   lib.rs          – public API re-exports
-  altitude.rs     – AltitudeEstimator: update(), state accessors
-  types.rs        – AltitudeSettings, AltitudeEstimate
-  math.rs         – filter helpers (high-pass / low-pass primitives)
+  altitude.rs     – AltitudeEstimator: new(), with_settings(), reset(),
+                    update(), altitude(), vertical_velocity()
+  types.rs        – AltitudeSettings
 ```
 
 ### Algorithm
 
-Complementary filter:
-- **High-pass** integrated vertical acceleration — short-term accuracy, no baro lag
-- **Low-pass** barometric altitude — long-term drift correction
-- Single tunable blend weight `alpha` via `AltitudeSettings` (accel path gets `alpha`, baro path gets `1 - alpha`)
+Two-state complementary observer (altitude + vertical velocity):
 
-State: `velocity`, `altitude`, `baro_reference`, previous accel/baro samples.
+```
+residual = baro_altitude - h
+v += a*dt + velocity_gain * residual
+h += v*dt + position_gain * residual
+```
+
+- Accel integrated twice (a → v → h); baro residual corrects **both** states, not just altitude
+- Two independent gains: `position_gain` (≈ 2ζω) and `velocity_gain` (≈ ω²) for a 2nd-order observer
+- One gain (single `alpha`) is **wrong** for this output shape — velocity needs its own correction path or it drifts with accel bias
+
+State: `altitude`, `velocity`, `reference_set` flag (auto-zero on first sample if `reset()` not called).
+
+### API Shape (matches `fusion-ahrs` conventions)
+
+- `AltitudeEstimator::new()` — defaults
+- `AltitudeEstimator::with_settings(s)` — custom settings
+- `reset(baro_altitude)` — explicit reference zero
+- `update(vertical_accel, baro_altitude, dt)` — returns `()`
+- `altitude()`, `vertical_velocity()` — accessors (mirrors sibling's `quaternion()`, `linear_acceleration()` style)
 
 ### Integration with `fusion-ahrs`
 
 ```rust
 ahrs.update(gyro, accel, mag, dt);
-let vertical_accel = ahrs.earth_acceleration().z;
-let est = altitude.update(vertical_accel, baro_altitude_m, dt);
+let vertical_accel = ahrs.earth_acceleration().z; // +up under NWU/ENU; negate for NED
+altitude.update(vertical_accel, baro_altitude_m, dt);
+let h = altitude.altitude();
+let vz = altitude.vertical_velocity();
 ```
 
 ### Dependencies
@@ -67,9 +84,9 @@ let est = altitude.update(vertical_accel, baro_altitude_m, dt);
 - Commit messages: conventional-commit style — `feat(altitude): …`, `fix: …`, `docs: …`, `chore(deps): …`, `fmt: …`
 
 ## Open Design Questions
-- Filter form: simple complementary (start here) vs. 2-state Kalman (later, if drift demands it)
-- Baro reference handling: auto-zero on first sample vs. explicit `set_reference()`
-- Whether to expose intermediate state (raw integrated velocity, baro residual) for diagnostics
+- Filter form: 2-state complementary observer (start here) vs. 2-state Kalman with explicit accel/baro noise models (later, if tuning needs are sensor-specific)
+- Whether to expose intermediate state (baro residual, ground reference) for diagnostics
+- Whether to accept `Vector3<f32>` + a `Convention` instead of a scalar `vertical_accel` (cleaner call site, adds `Convention` coupling)
 
 ## Success Criteria
 - Drift-corrected altitude tracks truth within bounded error on synthetic + recorded data
