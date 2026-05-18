@@ -45,12 +45,11 @@ loop {
 
 ## Settings (planned)
 
-| Setting       | Type  | Range     | Typical | Effect |
-|---------------|-------|-----------|---------|--------|
-| `accel_alpha` | `f32` | `0.0–1.0` | `~0.98` | Weight on integrated vertical acceleration. Higher → faster response to real motion, but more drift over time. Lower → smoother, more reliant on the barometer. |
-| `baro_alpha`  | `f32` | `0.0–1.0` | `~0.02` | Weight on barometric altitude. Higher → tighter drift correction, but more baro noise/lag visible in the output. Lower → baro contributes less anchoring. |
+| Setting | Type  | Range     | Typical | Effect |
+|---------|-------|-----------|---------|--------|
+| `alpha` | `f32` | `0.0–1.0` | `~0.98` | Blend weight: `alpha` on integrated vertical acceleration, `1 - alpha` on barometric altitude. Higher → faster response, more drift between baro corrections. Lower → tighter drift correction, more baro noise/lag in the output. |
 
-For a classic complementary filter the two weights are paired (`baro_alpha = 1.0 - accel_alpha`). Exposing them separately leaves room for asymmetric smoothing once tuning data is in hand.
+A single parameter keeps the complementary filter at its natural one degree of freedom — the high-pass on accel and low-pass on baro share the same corner, so the two paths sum to unity gain at the crossover.
 
 ## Installation
 

@@ -38,7 +38,7 @@ src/
 Complementary filter:
 - **High-pass** integrated vertical acceleration — short-term accuracy, no baro lag
 - **Low-pass** barometric altitude — long-term drift correction
-- Tunable corner via `AltitudeSettings` (accel_alpha, baro_alpha)
+- Single tunable blend weight `alpha` via `AltitudeSettings` (accel path gets `alpha`, baro path gets `1 - alpha`)
 
 State: `velocity`, `altitude`, `baro_reference`, previous accel/baro samples.
 
