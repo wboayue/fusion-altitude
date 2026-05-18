@@ -1,6 +1,6 @@
 [package]
 name = "fusion-altitude"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 authors = ["Wil Boayue <wil@wsbsolutions.com>"]
 description = "A no_std altitude and vertical-velocity estimator. Fuses barometric pressure with gravity-compensated vertical acceleration via a 3-state complementary observer (altitude, vertical velocity, and accel-bias). Companion to fusion-ahrs."
