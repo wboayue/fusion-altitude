@@ -76,9 +76,50 @@ fn constant_upward_accel_against_truthful_baro() {
 #[test]
 fn settings_default_is_well_damped() {
     let s = AltitudeSettings::default();
-    // ζ = K_h / (2 sqrt(K_v))
+    // Approximate effective damping of the position/velocity subsystem:
+    // ζ_eff ≈ K_h / (2 sqrt(K_v)). Exact only when bias_gain = 0, but the
+    // cascaded design keeps it close to the design value of 0.7.
     let zeta = s.position_gain / (2.0 * libm_sqrtf(s.velocity_gain));
     assert!(zeta > 0.5 && zeta < 1.0, "ζ={}", zeta);
+}
+
+#[test]
+fn settings_default_satisfies_routh_hurwitz() {
+    // Stability of s³ + K_h s² + K_v s + K_b requires K_h · K_v > K_b.
+    let s = AltitudeSettings::default();
+    assert!(
+        s.position_gain * s.velocity_gain > s.bias_gain,
+        "K_h·K_v={} not > K_b={}",
+        s.position_gain * s.velocity_gain,
+        s.bias_gain
+    );
+}
+
+#[test]
+fn estimates_constant_accel_bias_and_zeroes_altitude_error() {
+    // Stationary at 0 m with the accelerometer reporting a constant
+    // +0.12 m/s² (~12 mg) bias. The 2-state filter would settle at a
+    // +bias/K_v ≈ +4 cm altitude error; the 3-state observer must
+    // identify the bias and drive altitude error to zero.
+    let mut est = AltitudeEstimator::new();
+    let true_bias = 0.12_f32;
+
+    for _ in 0..6000 {
+        est.update(true_bias, 0.0, DT);
+    }
+
+    assert!(est.altitude().abs() < 0.01, "h={}", est.altitude());
+    assert!(
+        est.vertical_velocity().abs() < 0.01,
+        "v={}",
+        est.vertical_velocity()
+    );
+    assert!(
+        (est.accel_bias() - true_bias).abs() < 0.01,
+        "b_hat={} true={}",
+        est.accel_bias(),
+        true_bias
+    );
 }
 
 // tiny no_std-friendly sqrt for the damping check

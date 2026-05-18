@@ -1,10 +1,17 @@
 /// Tuning parameters for [`crate::AltitudeEstimator`].
 ///
-/// The two gains define the 2nd-order complementary filter's
-/// characteristic polynomial `s² + position_gain·s + velocity_gain`. A
-/// well-behaved response is obtained by choosing
-/// `position_gain = 2ζω` and `velocity_gain = ω²`, with damping `ζ ≈ 0.7`
-/// and bandwidth `ω` (rad/s).
+/// The three gains define a 3rd-order observer with characteristic
+/// polynomial `s³ + position_gain·s² + velocity_gain·s + bias_gain`.
+/// A clean cascaded design places a damped position/velocity pair at
+/// bandwidth `ω` and a slow real bias pole at `ω_b ≪ ω`:
+///
+/// ```text
+/// position_gain = 2ζω + ω_b      (1/s)
+/// velocity_gain = ω² + 2ζω·ω_b   (1/s²)
+/// bias_gain     = ω² · ω_b       (1/s³)
+/// ```
+///
+/// Routh-Hurwitz stability requires `position_gain · velocity_gain > bias_gain`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AltitudeSettings {
     /// Feedback gain (1/s) from baro residual into the altitude state.
@@ -14,19 +21,28 @@ pub struct AltitudeSettings {
     /// Feedback gain (1/s²) from baro residual into the velocity state.
     /// Damps integrated-acceleration drift in the velocity estimate.
     pub velocity_gain: f32,
+
+    /// Feedback gain (1/s³) from baro residual into the accel-bias state.
+    /// Bias-loop bandwidth `ω_b ≈ (bias_gain / velocity_gain)`. Set to
+    /// `0.0` to disable bias estimation (recovers the original 2-state
+    /// filter).
+    pub bias_gain: f32,
 }
 
 impl Default for AltitudeSettings {
-    /// Tuned for a VTOL multirotor: `ω ≈ 1.5 rad/s` bandwidth, `ζ ≈ 0.7`
-    /// damping. Error-envelope time constant `τ = 1/(ζω) ≈ 1 s`
-    /// (2% settling ≈ `4τ ≈ 4 s`). Fast enough for altitude-hold control
-    /// loops while rejecting prop-wash baro noise. Retune for slower
-    /// platforms (balloons, fixed-wing) or noisier sensors — see the
-    /// Tuning Guide in `README.md`.
+    /// Tuned for a VTOL multirotor: `ω = 1.5 rad/s`, `ζ = 0.7`,
+    /// `ω_b = 0.3 rad/s` (position/velocity loop ~1 s, bias loop ~10 s
+    /// to converge). Steady-state altitude error from a constant Z accel
+    /// bias is **zero** with these gains — the bias is estimated as a
+    /// state and subtracted from the measured acceleration.
     fn default() -> Self {
+        // K_h = 2·0.7·1.5 + 0.3       = 2.40
+        // K_v = 1.5²    + 2·0.7·1.5·0.3 = 2.88
+        // K_b = 1.5² · 0.3            = 0.675
         Self {
-            position_gain: 2.1,
-            velocity_gain: 2.25,
+            position_gain: 2.40,
+            velocity_gain: 2.88,
+            bias_gain: 0.675,
         }
     }
 }
