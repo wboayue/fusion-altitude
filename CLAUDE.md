@@ -30,7 +30,8 @@ cargo run --release --example realistic_noise    # demo with MEMS-class noise + 
 src/
   lib.rs                – public API re-exports, GRAVITY const
   altitude.rs           – AltitudeEstimator: new(), with_settings(), reset(),
-                          update(), altitude(), vertical_velocity(), accel_bias()
+                          update(), altitude(), vertical_velocity(), accel_bias(),
+                          baro_residual()
   altitude_tests.rs     – unit tests for altitude.rs
   types.rs              – AltitudeSettings
   types_tests.rs        – unit tests for types.rs (when added)
@@ -72,6 +73,7 @@ State: `altitude`, `velocity`, `accel_bias`, `reference_set` flag (auto-zero on 
 - `reset(baro_altitude)` — explicit reference zero (preserves accel_bias)
 - `update(vertical_accel, baro_altitude, dt)` — returns `()`
 - `altitude()`, `vertical_velocity()`, `accel_bias()` — accessors (mirrors sibling's `quaternion()`, `linear_acceleration()` style)
+- `baro_residual()` — baro innovation from the last `update` (m), for autopilot-layer diagnostics. Zero before first `update` and immediately after `reset`.
 
 ### Integration with `fusion-ahrs`
 
@@ -149,7 +151,7 @@ After any README edit run `cargo test --doc` before committing.
 ## Open Design Questions
 - Whether to expose a `set_accel_bias(b)` API for warm-starting from a stationary pre-flight calibration (currently the bias has to converge from 0 over ~10 s).
 - Filter form: keep 3rd-order complementary observer (current) vs. 3-state Kalman with explicit accel/baro noise models (later, if tuning needs become sensor-specific).
-- Whether to expose intermediate state (baro residual, ground reference) for diagnostics.
+- Whether to expose the ground reference for diagnostics. (Baro residual is now exposed via `baro_residual()`.)
 - Whether to accept `Vector3<f32>` + a `Convention` instead of a scalar `vertical_accel` (cleaner call site, adds `Convention` coupling).
 
 ## Success Criteria

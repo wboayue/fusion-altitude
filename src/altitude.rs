@@ -31,6 +31,7 @@ pub struct AltitudeEstimator {
     altitude: f32,
     velocity: f32,
     accel_bias: f32,
+    baro_residual: f32,
     reference_set: bool,
 }
 
@@ -47,6 +48,7 @@ impl AltitudeEstimator {
             altitude: 0.0,
             velocity: 0.0,
             accel_bias: 0.0,
+            baro_residual: 0.0,
             reference_set: false,
         }
     }
@@ -62,6 +64,7 @@ impl AltitudeEstimator {
     pub fn reset(&mut self, baro_altitude: f32) {
         self.altitude = baro_altitude;
         self.velocity = 0.0;
+        self.baro_residual = 0.0;
         self.reference_set = true;
     }
 
@@ -87,6 +90,7 @@ impl AltitudeEstimator {
         self.velocity += (corrected_accel + self.settings.velocity_gain * residual) * dt;
         self.altitude += (self.velocity + self.settings.position_gain * residual) * dt;
         self.accel_bias -= self.settings.bias_gain * residual * dt;
+        self.baro_residual = residual;
     }
 
     /// Current fused altitude estimate (m), in the reference frame
@@ -105,6 +109,20 @@ impl AltitudeEstimator {
     /// `3 / ω_b` seconds (~10 s with defaults).
     pub fn accel_bias(&self) -> f32 {
         self.accel_bias
+    }
+
+    /// Baro innovation from the most recent `update`, in meters:
+    /// `baro_altitude - altitude()` measured *before* that update was
+    /// applied. Sign matches the residual that drove the correction
+    /// (positive ⇒ baro above the estimate).
+    ///
+    /// Exposed for autopilot/outer-loop diagnostics — fault detection
+    /// (sustained large residual = baro stuck, prop-wash, or filter
+    /// divergence), confidence weighting, or innovation-gated handoff
+    /// to a nav EKF. Zero before the first `update` and immediately
+    /// after `reset`.
+    pub fn baro_residual(&self) -> f32 {
+        self.baro_residual
     }
 }
 

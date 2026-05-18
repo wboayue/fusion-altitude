@@ -140,6 +140,53 @@ fn reset_preserves_accel_bias() {
 }
 
 #[test]
+fn baro_residual_is_zero_before_update_and_after_reset() {
+    let mut est = AltitudeEstimator::new();
+    assert_eq!(est.baro_residual(), 0.0);
+
+    // Auto-zero on first sample → altitude == baro → residual stays 0.
+    est.update(0.0, 50.0, DT);
+    assert_eq!(est.baro_residual(), 0.0);
+
+    // Diverge, then reset; residual must clear.
+    for _ in 0..50 {
+        est.update(0.0, 60.0, DT);
+    }
+    assert!(est.baro_residual() > 0.0);
+    est.reset(0.0);
+    assert_eq!(est.baro_residual(), 0.0);
+}
+
+#[test]
+fn baro_residual_sign_matches_baro_minus_altitude() {
+    // Baro suddenly above the converged estimate ⇒ residual > 0.
+    let mut est = AltitudeEstimator::new();
+    est.reset(0.0);
+    est.update(0.0, 10.0, DT);
+    assert!(est.baro_residual() > 0.0);
+    assert!((est.baro_residual() - (10.0 - 0.0)).abs() < 1e-6);
+
+    // Step baro below estimate ⇒ residual flips negative.
+    let h = est.altitude();
+    est.update(0.0, h - 5.0, DT);
+    assert!(est.baro_residual() < 0.0);
+}
+
+#[test]
+fn baro_residual_decays_at_convergence() {
+    // Once the filter has converged on a constant baro, residual ≈ 0.
+    let mut est = AltitudeEstimator::new();
+    for _ in 0..CONVERGENCE_STEPS {
+        est.update(0.0, 100.0, DT);
+    }
+    assert!(
+        est.baro_residual().abs() < 1e-3,
+        "r={}",
+        est.baro_residual()
+    );
+}
+
+#[test]
 fn bias_gain_zero_recovers_two_state_filter() {
     // bias_gain = 0 disables the bias loop; a constant accel bias
     // must then park at +bias/K_v steady state, matching the original
