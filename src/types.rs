@@ -37,9 +37,6 @@ impl Default for AltitudeSettings {
     /// bias is **zero** with these gains — the bias is estimated as a
     /// state and subtracted from the measured acceleration.
     fn default() -> Self {
-        // K_h = 2·0.7·1.5 + 0.3       = 2.40
-        // K_v = 1.5²    + 2·0.7·1.5·0.3 = 2.88
-        // K_b = 1.5² · 0.3            = 0.675
         Self {
             position_gain: 2.40,
             velocity_gain: 2.88,

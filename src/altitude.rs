@@ -82,14 +82,8 @@ impl AltitudeEstimator {
         let residual = baro_altitude - self.altitude;
         let corrected_accel = vertical_accel - self.accel_bias;
 
-        // Semi-implicit Euler discretisation of the continuous-time
-        // observer
-        //   v̇ = (a - b) + K_v (z - h)
-        //   ḣ = v       + K_h (z - h)
-        //   ḃ = -K_b (z - h)
-        // The bias-update sign comes from the error dynamics: if h_hat
-        // overshoots truth, residual is negative, and b_hat must increase
-        // to subtract more from the integrated accel.
+        // Bias-update sign: if h overshoots truth, residual is negative,
+        // so b must increase to subtract more from the integrated accel.
         self.velocity += (corrected_accel + self.settings.velocity_gain * residual) * dt;
         self.altitude += (self.velocity + self.settings.position_gain * residual) * dt;
         self.accel_bias -= self.settings.bias_gain * residual * dt;
