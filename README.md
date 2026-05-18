@@ -45,10 +45,12 @@ loop {
 
 ## Settings (planned)
 
-| Setting       | Type  | Description |
-|---------------|-------|-------------|
-| `accel_alpha` | `f32` | High-pass coefficient for acceleration integration |
-| `baro_alpha`  | `f32` | Low-pass coefficient for barometric altitude |
+| Setting       | Type  | Range     | Typical | Effect |
+|---------------|-------|-----------|---------|--------|
+| `accel_alpha` | `f32` | `0.0–1.0` | `~0.98` | Weight on integrated vertical acceleration. Higher → faster response to real motion, but more drift over time. Lower → smoother, more reliant on the barometer. |
+| `baro_alpha`  | `f32` | `0.0–1.0` | `~0.02` | Weight on barometric altitude. Higher → tighter drift correction, but more baro noise/lag visible in the output. Lower → baro contributes less anchoring. |
+
+For a classic complementary filter the two weights are paired (`baro_alpha = 1.0 - accel_alpha`). Exposing them separately leaves room for asymmetric smoothing once tuning data is in hand.
 
 ## Installation
 
