@@ -37,16 +37,17 @@ src/
 
 ### Algorithm
 
-Two-state complementary observer (altitude + vertical velocity):
+Two-state complementary observer (altitude + vertical velocity), semi-implicit Euler discretisation of `v̇ = a + K_v·(z - h)`, `ḣ = v + K_h·(z - h)`:
 
-```
+```text
 residual = baro_altitude - h
-v += a*dt + velocity_gain * residual
-h += v*dt + position_gain * residual
+v += (a + velocity_gain * residual) * dt
+h += (v + position_gain * residual) * dt    # uses the just-updated v
 ```
 
+- The `dt` factor on the residual terms is required for dimensional correctness: `K_v` has units 1/s², residual is m, so `K_v * residual * dt` is m/s — the units of `v`.
 - Accel integrated twice (a → v → h); baro residual corrects **both** states, not just altitude
-- Two independent gains: `position_gain` (≈ 2ζω) and `velocity_gain` (≈ ω²) for a 2nd-order observer
+- Two independent gains: `position_gain` (≈ 2ζω, units 1/s) and `velocity_gain` (≈ ω², units 1/s²) for a 2nd-order observer
 - One gain (single `alpha`) is **wrong** for this output shape — velocity needs its own correction path or it drifts with accel bias
 
 State: `altitude`, `velocity`, `reference_set` flag (auto-zero on first sample if `reset()` not called).
@@ -61,17 +62,20 @@ State: `altitude`, `velocity`, `reference_set` flag (auto-zero on first sample i
 
 ### Integration with `fusion-ahrs`
 
-```rust
+`fusion-ahrs::Ahrs::earth_acceleration()` returns **g**, not m/s². Multiply by `fusion_altitude::GRAVITY` (= 9.80665) to convert. Sign: positive Z is up under NWU/ENU; negate for NED.
+
+```rust,ignore
 ahrs.update(gyro, accel, mag, dt);
-let vertical_accel = ahrs.earth_acceleration().z; // +up under NWU/ENU; negate for NED
+let vertical_accel = ahrs.earth_acceleration().z * fusion_altitude::GRAVITY;
 altitude.update(vertical_accel, baro_altitude_m, dt);
 let h = altitude.altitude();
 let vz = altitude.vertical_velocity();
 ```
 
 ### Dependencies
-- `nalgebra` (no-std, `libm` feature) — match `fusion-ahrs` choice
-- Dev only: `criterion`, `plotters`, `csv`, `serde` for tests/examples
+- **None** in the core crate. Algorithm is pure scalar `f32` arithmetic (`+`, `-`, `*`, `/`) — no transcendentals, no vector ops, no allocator. Keeps the dependency tree empty and the `no_std` story trivial.
+- Add `nalgebra` (with `libm` feature) only if a future public API takes/returns `Vector3<f32>`; otherwise resist.
+- Future dev-deps (when examples land): `criterion` for benches, `plotters` for visualisation.
 
 ### Code Quality Standards
 - Single-responsibility modules, minimal public API
@@ -87,9 +91,19 @@ let vz = altitude.vertical_velocity();
 
 ## Development Guidelines
 - Maintain embedded compatibility (`cargo build --no-default-features`)
-- Use `nalgebra` types where vectors are needed; scalars stay `f32`
+- Use `nalgebra` types only where vectors are genuinely needed; scalars stay `f32`. The core crate currently has zero deps — preserve that.
 - Keep `README.md` in sync with public API in the same PR
 - Commit messages: conventional-commit style — `feat(altitude): …`, `fix: …`, `docs: …`, `chore(deps): …`, `fmt: …`
+
+### Doc-tests and the README
+
+`src/lib.rs` ingests the README via `#![doc = include_str!("../README.md")]`, so README fenced blocks are compiled as doc-tests by default. When editing README code blocks:
+
+- **Pseudocode / equations** → tag the block ` ```text ` (otherwise Rust tries to compile it).
+- **Sketches that reference external symbols** (e.g. `fusion_ahrs::Ahrs`, `read_barometer()`) → tag ` ```rust,ignore ` — `no_run` is not enough because they'd still fail to compile.
+- **Real, runnable examples** → leave untagged or ` ```rust ` so they get type-checked.
+
+After any README edit run `cargo test --doc` before committing.
 
 ## Design Decisions (locked unless reopened)
 
