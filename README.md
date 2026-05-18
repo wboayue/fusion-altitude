@@ -77,11 +77,20 @@ Not yet published.
 cargo add fusion-altitude
 ```
 
+## Examples
+
+```bash
+cargo run --release --example with_fusion_ahrs
+```
+
+End-to-end demo of the `fusion-ahrs` → `fusion-altitude` pipeline using synthetic ±5 m vertical oscillation at 0.1 Hz. After the AHRS init transient (~3 s), altitude tracks truth to within a few cm.
+
 ## Development
 
 ```bash
 cargo test                         # all tests
 cargo build --no-default-features  # verify no_std build
+cargo bench                        # criterion benches
 cargo fmt
 cargo clippy
 ```
