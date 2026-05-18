@@ -1,5 +1,6 @@
 [![License:MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Crates.io](https://img.shields.io/crates/v/fusion-altitude.svg)](https://crates.io/crates/fusion-altitude)
+[![Docs.rs](https://docs.rs/fusion-altitude/badge.svg)](https://docs.rs/fusion-altitude)
 [![Coverage Status](https://coveralls.io/repos/github/wboayue/fusion-altitude/badge.svg?branch=main)](https://coveralls.io/github/wboayue/fusion-altitude?branch=main)
 
 # fusion-altitude
