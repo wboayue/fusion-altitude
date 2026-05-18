@@ -14,22 +14,22 @@ Companion crate to [`fusion-ahrs`](https://github.com/wboayue/fusion-ahrs). Impl
 
 ## Algorithm
 
-Two-state complementary observer over altitude and vertical velocity:
+Two-state complementary observer over altitude and vertical velocity, semi-implicit Euler discretisation of the continuous-time form `v̇ = a + K_v·(z - h)`, `ḣ = v + K_h·(z - h)`:
 
-```
+```text
 residual = baro_altitude - h
-v += a*dt + velocity_gain * residual
-h += v*dt + position_gain * residual
+v += (a + velocity_gain * residual) * dt
+h += (v + position_gain * residual) * dt    # uses the just-updated v
 ```
 
-- Accel is integrated twice (a → v → h); the baro residual feeds back into **both** states, so velocity also gets drift-corrected — not just altitude.
+- Accel is integrated twice (a → v → h); the baro residual feeds back into **both** states, so velocity is drift-corrected too — not just altitude.
 - Two independent gains tune the position and velocity time constants separately. Larger gains trust the baro more (faster correction, more noise/lag in the output); smaller gains trust the inertial integration more (smoother, slower to recover from drift).
 
-The vertical acceleration input is expected to be gravity-compensated and in the Earth frame, positive = up. When paired with `fusion-ahrs`, this is the Z component of `ahrs.earth_acceleration()` under NWU/ENU conventions (negate for NED).
+The vertical acceleration input is expected to be gravity-compensated, Earth frame, in **m/s²**, positive = up. When paired with `fusion-ahrs`, `earth_acceleration()` returns units of g — multiply by `fusion_altitude::GRAVITY` (and negate for NED).
 
-## Usage (planned API)
+## Usage
 
-```rust
+```rust,ignore
 use fusion_ahrs::Ahrs;
 use fusion_altitude::AltitudeEstimator;
 
@@ -43,8 +43,9 @@ loop {
     let dt = 0.01; // 100 Hz
 
     ahrs.update(gyro, accel, mag, dt);
-    let vertical_accel = ahrs.earth_acceleration().z; // m/s², Earth frame, +up
-    let baro_altitude = read_barometer();              // m
+    // earth_acceleration() returns g; convert to m/s². Negate for NED.
+    let vertical_accel = ahrs.earth_acceleration().z * fusion_altitude::GRAVITY;
+    let baro_altitude = read_barometer(); // m
 
     altitude.update(vertical_accel, baro_altitude, dt);
 
@@ -58,14 +59,14 @@ loop {
 
 `AltitudeEstimator::new()` constructs with defaults; `AltitudeEstimator::with_settings(s)` overrides. `reset(baro_altitude)` zeroes the reference explicitly; otherwise the first `update()` call auto-zeroes against the first baro sample.
 
-## Settings (planned)
+## Settings
 
-| Setting          | Type  | Range     | Typical | Effect |
-|------------------|-------|-----------|---------|--------|
-| `position_gain`  | `f32` | `> 0`     | `~0.3`  | Feedback gain from baro residual into the altitude state. Sets the altitude correction time constant `τ_h ≈ 1 / position_gain`. Larger → tighter tracking of baro, more baro noise visible. |
-| `velocity_gain`  | `f32` | `> 0`     | `~0.05` | Feedback gain from baro residual into the velocity state. Damps integrated-acceleration drift in `v`. Larger → faster velocity correction, more sensitivity to baro noise; smaller → cleaner velocity but slower to recover from accel bias. |
+| Setting          | Type  | Units  | Default (VTOL) | Effect |
+|------------------|-------|--------|----------------|--------|
+| `position_gain`  | `f32` | `1/s`  | `2.1`          | Feedback gain from baro residual into the altitude state. Larger → tighter tracking of baro, more baro noise visible in altitude. |
+| `velocity_gain`  | `f32` | `1/s²` | `2.25`         | Feedback gain from baro residual into the velocity state. Damps integrated-acceleration drift in `v`. Larger → faster velocity correction, more sensitivity to baro noise. |
 
-The two gains together set a 2nd-order observer; choosing them as `K_h = 2ζω` and `K_v = ω²` (with damping `ζ ≈ 0.7` and bandwidth `ω`) gives a well-behaved critically-near-damped response.
+The two gains form a 2nd-order observer with characteristic polynomial `s² + position_gain·s + velocity_gain`. Pick `position_gain = 2ζω`, `velocity_gain = ω²` with damping `ζ ≈ 0.7` and bandwidth `ω` (rad/s). The defaults give `ω ≈ 1.5 rad/s` (~1 s settling) — fast enough for VTOL multirotor altitude-hold loops while rejecting prop-wash baro noise. Retune for slower platforms (balloons, fixed-wing) or noisier sensors.
 
 ## Installation
 

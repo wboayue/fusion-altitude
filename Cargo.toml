@@ -1,0 +1,17 @@
+[package]
+name = "fusion-altitude"
+version = "0.1.0"
+edition = "2024"
+authors = ["Wil Boayue <wil@wsbsolutions.com>"]
+description = "A no_std altitude and vertical-velocity estimator. Fuses barometric pressure with gravity-compensated vertical acceleration via a 2-state complementary observer. Companion to fusion-ahrs."
+readme = "README.md"
+homepage = "https://github.com/wboayue/fusion-altitude/"
+repository = "https://github.com/wboayue/fusion-altitude/"
+license = "MIT"
+keywords = ["altitude", "barometer", "sensor-fusion", "ahrs", "embedded"]
+categories = ["embedded", "algorithms", "science"]
+exclude = ["CLAUDE.md"]
+
+[dependencies]
+
+[dev-dependencies]
