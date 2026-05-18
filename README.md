@@ -1,4 +1,5 @@
 [![License:MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Coverage Status](https://coveralls.io/repos/github/wboayue/fusion-altitude/badge.svg?branch=main)](https://coveralls.io/github/wboayue/fusion-altitude?branch=main)
 
 # fusion-altitude
 
