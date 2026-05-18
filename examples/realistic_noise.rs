@@ -10,16 +10,17 @@
 //!   mag     noise 0.05 normalised units
 //!   baro    noise 10 cm    + 30 cm prop-wash at 8 Hz
 //!
-//! Observed (seed 0xC0FFEE, 60 s):
-//!   steady-state RMS error ≈ 6 cm
-//!   steady-state max error ≈ 12 cm
-//!   steady-state mean error ≈ +5 cm
+//! Observed (seed 0xC0FFEE, 60 s, 3-state observer with bias estimation):
+//!   steady-state mean error ≈ +0.9 cm
+//!   steady-state RMS error  ≈ 3.6 cm
+//!   steady-state max error  ≈ 15 cm
 //!
-//! The +5 cm bias follows from the +12 mg Z accel bias: at steady state
-//! `v̇ = 0` forces `K_v · (z - h_hat) = -a_bias`, so with `z = h_true`,
-//!   `e_h ≡ h_hat - h_true = +a_bias / K_v ≈ +0.118 / 2.25 ≈ +0.052 m`.
-//! Sign matches: an upward accel bias drives the estimate upward. Tighter
-//! `velocity_gain` (or runtime accel-bias estimation, future work) reduces it.
+//! The 3-state observer identifies the +12 mg Z accel bias as a state and
+//! subtracts it from the measured acceleration, so the steady-state mean
+//! error (which used to park at +a_bias/K_v ≈ +5 cm with the 2-state filter)
+//! is now ~0. The bias loop's ~10 s convergence inflates the initial
+//! transient compared to the 2-state filter; hold position during the
+//! first ~10 s of flight if that matters.
 //!
 //! Reproducible: seeded PCG, fixed sample count.
 //!

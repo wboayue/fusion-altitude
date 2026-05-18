@@ -1,10 +1,12 @@
 use crate::types::AltitudeSettings;
 
-/// 2nd-order complementary filter fusing vertical acceleration with
-/// barometric altitude to produce drift-corrected altitude and vertical
-/// velocity estimates. The two filter states are altitude and vertical
-/// velocity; both are corrected by the baro residual through independent
-/// gains.
+/// 3rd-order complementary observer fusing vertical acceleration with
+/// barometric altitude to produce drift-corrected altitude, vertical
+/// velocity, and a running estimate of the Z-axis accelerometer bias.
+/// All three states are corrected by the baro residual through
+/// independent gains; the estimated bias is subtracted from the measured
+/// acceleration before integration, so a constant accel bias produces
+/// **no** steady-state altitude error.
 ///
 /// # Example
 ///
@@ -28,6 +30,7 @@ pub struct AltitudeEstimator {
     settings: AltitudeSettings,
     altitude: f32,
     velocity: f32,
+    accel_bias: f32,
     reference_set: bool,
 }
 
@@ -43,12 +46,16 @@ impl AltitudeEstimator {
             settings,
             altitude: 0.0,
             velocity: 0.0,
+            accel_bias: 0.0,
             reference_set: false,
         }
     }
 
     /// Set the altitude reference explicitly to `baro_altitude` and zero
-    /// the velocity estimate.
+    /// the velocity estimate. The accel-bias estimate is **preserved** —
+    /// it's a physical sensor property independent of the altitude
+    /// reference frame, and a converged bias is worth keeping across a
+    /// reference-zero event.
     ///
     /// If `reset` is not called before the first `update`, the first baro
     /// sample auto-zeroes the reference.
@@ -73,13 +80,13 @@ impl AltitudeEstimator {
         }
 
         let residual = baro_altitude - self.altitude;
+        let corrected_accel = vertical_accel - self.accel_bias;
 
-        // Semi-implicit Euler: update v first, then h with the new v.
-        // Equivalent to the continuous-time 2nd-order complementary filter
-        //   v̇ = a + K_v (z - h),  ḣ = v + K_h (z - h)
-        // discretised symplectically.
-        self.velocity += (vertical_accel + self.settings.velocity_gain * residual) * dt;
+        // Bias-update sign: if h overshoots truth, residual is negative,
+        // so b must increase to subtract more from the integrated accel.
+        self.velocity += (corrected_accel + self.settings.velocity_gain * residual) * dt;
         self.altitude += (self.velocity + self.settings.position_gain * residual) * dt;
+        self.accel_bias -= self.settings.bias_gain * residual * dt;
     }
 
     /// Current fused altitude estimate (m), in the reference frame
@@ -91,6 +98,13 @@ impl AltitudeEstimator {
     /// Current fused vertical velocity estimate (m/s, positive = up).
     pub fn vertical_velocity(&self) -> f32 {
         self.velocity
+    }
+
+    /// Current estimate of the additive Z-axis accelerometer bias
+    /// (m/s², +up). Converges to the true sensor bias over roughly
+    /// `3 / ω_b` seconds (~10 s with defaults).
+    pub fn accel_bias(&self) -> f32 {
+        self.accel_bias
     }
 }
 

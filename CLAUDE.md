@@ -1,6 +1,6 @@
 ## Objective
 
-A `no_std`-friendly altitude and vertical-velocity estimator that fuses barometric pressure with gravity-compensated vertical acceleration from an AHRS via a 2nd-order complementary filter, yielding drift-corrected altitude.
+A `no_std`-friendly altitude and vertical-velocity estimator that fuses barometric pressure with gravity-compensated vertical acceleration from an AHRS via a 3rd-order complementary observer (estimating altitude, vertical velocity, and Z-axis accel bias), yielding drift-corrected altitude with zero steady-state error from constant accel bias.
 
 Companion crate to [`fusion-ahrs`](https://github.com/wboayue/fusion-ahrs). Designed to consume the Earth-frame acceleration output from that library and combine it with a barometric altitude source.
 
@@ -21,7 +21,7 @@ cargo run --release --example realistic_noise    # demo with MEMS-class noise + 
 ## Architecture
 
 - **Input**: vertical acceleration (m/s², gravity-compensated, Earth frame) + barometric altitude (m) + dt (s)
-- **Output**: fused altitude (m) and vertical velocity (m/s)
+- **Output**: fused altitude (m), vertical velocity (m/s), Z-axis accel bias estimate (m/s²)
 - **Compatibility**: `#![no_std]` (edition 2024)
 
 ### Source Layout
@@ -30,7 +30,7 @@ cargo run --release --example realistic_noise    # demo with MEMS-class noise + 
 src/
   lib.rs                – public API re-exports, GRAVITY const
   altitude.rs           – AltitudeEstimator: new(), with_settings(), reset(),
-                          update(), altitude(), vertical_velocity()
+                          update(), altitude(), vertical_velocity(), accel_bias()
   altitude_tests.rs     – unit tests for altitude.rs
   types.rs              – AltitudeSettings
   types_tests.rs        – unit tests for types.rs (when added)
@@ -38,34 +38,39 @@ src/
 
 ### Algorithm
 
-2nd-order complementary filter, two states (altitude + vertical velocity). Semi-implicit Euler discretisation of `v̇ = a + K_v·(z - h)`, `ḣ = v + K_h·(z - h)`:
+3rd-order complementary observer, three states (altitude + vertical velocity + Z accel bias). Semi-implicit Euler discretisation of `v̇ = (a - b) + K_v·(z - h)`, `ḣ = v + K_h·(z - h)`, `ḃ = -K_b·(z - h)`:
 
 ```text
-residual = baro_altitude - h
-v += (a + velocity_gain * residual) * dt
+residual        = baro_altitude - h
+corrected_accel = a - b
+v += (corrected_accel + velocity_gain * residual) * dt
 h += (v + position_gain * residual) * dt    # uses the just-updated v
+b -= bias_gain * residual * dt
 ```
 
-- The `dt` factor on the residual terms is required for dimensional correctness: `K_v` has units 1/s², residual is m, so `K_v * residual * dt` is m/s — the units of `v`.
-- Accel integrated twice (a → v → h); baro residual corrects **both** states, not just altitude
-- Two independent gains: `position_gain` (≈ 2ζω, units 1/s) and `velocity_gain` (≈ ω², units 1/s²) define the 2nd-order complementary filter
-- One gain (single `alpha`) is **wrong** for this output shape — velocity needs its own correction path or it drifts with accel bias
+- The `dt` factor on the residual terms is required for dimensional correctness: `K_v` has units 1/s², residual is m, so `K_v * residual * dt` is m/s — the units of `v`. Same chain for `K_b` (1/s³ × m × s = m/s²).
+- Accel integrated twice (a → v → h); baro residual corrects **all three** states.
+- Three independent gains: `position_gain` (= 2ζω + ω_b, units 1/s), `velocity_gain` (= ω² + 2ζω·ω_b, units 1/s²), `bias_gain` (= ω²·ω_b, units 1/s³). Cascaded pole placement: damped position/velocity pair at `ω`, slow real bias pole at `ω_b ≪ ω`.
+- Sign of the bias update: if `h_hat` overshoots truth, residual is negative, and `b_hat` must increase to subtract more from the integrated accel. Hence `b -= K_b · residual · dt` (with residual = baro - h).
+- Routh-Hurwitz stability for the characteristic polynomial `s³ + K_h s² + K_v s + K_b`: `K_h · K_v > K_b`. Asserted by `settings_default_satisfies_routh_hurwitz`.
+- One gain (single `alpha`) is **wrong** for this output shape — velocity needs its own correction path. The 2-state form is wrong too — it parks at a constant altitude bias of `+a_bias/K_v` when the accel has any DC offset (the 3-state observer is the principled fix).
 
-State: `altitude`, `velocity`, `reference_set` flag (auto-zero on first sample if `reset()` not called).
+State: `altitude`, `velocity`, `accel_bias`, `reference_set` flag (auto-zero on first sample if `reset()` not called). `reset()` preserves `accel_bias` — it's a physical sensor property independent of the altitude reference frame.
 
 ### Tuning notes
 
-- **Steady-state position error from constant accel bias**: a Z-axis accel bias `a_bias` (m/s², +up) produces `e_h ≡ h_hat - h_true ≈ +a_bias / velocity_gain` in steady state. Derivation: `v̇ = 0` forces `velocity_gain · (z - h) = -a_bias`, so `h_hat - h_true = +a_bias / velocity_gain`. Verified in `examples/realistic_noise.rs`: a +12 mg accel bias with `velocity_gain = 2.25` predicts +5.2 cm; observed +5.3 cm. Tighter `velocity_gain` shrinks this bias but admits more baro noise.
-- **Response time** for default VTOL gains (`ω = 1.5, ζ = 0.7`): error-envelope time constant `τ = 1/(ζω) ≈ 1 s`; 2% settling ≈ `4τ ≈ 4 s`. Don't confuse the two.
-- A future runtime accel-bias estimator (or 3-state observer) is the principled fix if this bias dominates.
+- **Steady-state altitude error from constant accel bias is zero** with `bias_gain > 0`. Derivation: at steady state `ḃ = 0` forces `residual = 0`, so `h_hat = baro = h_true`; then `v̇ = 0` forces `b_hat = a_bias`. Verified by `estimates_constant_accel_bias_and_zeroes_altitude_error` test and by `examples/realistic_noise.rs` (steady-state mean error +0.9 cm with a +12 mg accel bias, down from +5 cm in the 2-state version).
+- **Response time** for default VTOL gains (`ω = 1.5, ζ = 0.7, ω_b = 0.3`): position/velocity error-envelope time constant `τ = 1/(ζω) ≈ 1 s` (2% settling ≈ `4τ ≈ 4 s`). Bias-loop time constant `1/ω_b ≈ 3 s` (95% converged ≈ `3/ω_b ≈ 10 s`).
+- **Loop separation**: keep `ω_b ≲ ω/5` so the bias loop doesn't fight position/velocity transients. Faster `ω_b` means quicker bias convergence at the cost of more baro-noise injection into the bias estimate.
+- **Initial transient** is larger than the 2-state filter because the bias loop is spinning up at startup. Hold position during the first ~`3/ω_b` seconds, or set `bias_gain = 0.0` to recover the 2-state filter.
 
 ### API Shape (matches `fusion-ahrs` conventions)
 
 - `AltitudeEstimator::new()` — defaults
 - `AltitudeEstimator::with_settings(s)` — custom settings
-- `reset(baro_altitude)` — explicit reference zero
+- `reset(baro_altitude)` — explicit reference zero (preserves accel_bias)
 - `update(vertical_accel, baro_altitude, dt)` — returns `()`
-- `altitude()`, `vertical_velocity()` — accessors (mirrors sibling's `quaternion()`, `linear_acceleration()` style)
+- `altitude()`, `vertical_velocity()`, `accel_bias()` — accessors (mirrors sibling's `quaternion()`, `linear_acceleration()` style)
 
 ### Integration with `fusion-ahrs`
 
@@ -135,15 +140,16 @@ After any README edit run `cargo test --doc` before committing.
 ## Design Decisions (locked unless reopened)
 
 - **Separate crate, not a feature of `fusion-ahrs`.** `fusion-ahrs` deliberately tracks the upstream xioTechnologies C library (orientation only). Bundling baro/altitude in — even behind a cargo feature — would muddy that parity boundary and force altitude churn through the AHRS release cycle. Embedded users who only need orientation also keep a smaller surface.
-- **2nd-order complementary filter with two gains, not single-alpha 1st-order.** Output is altitude *and* velocity (two states). A 1st-order complementary filter only corrects one state; velocity then drifts with accel bias. Two gains (`position_gain`, `velocity_gain`) are physically independent — they set the position and velocity time constants of the 2nd-order filter (`K_h = 2ζω`, `K_v = ω²`). The frequency-domain check passes: baro path `(K_h·s + K_v) / (s² + K_h·s + K_v)` and accel path `1 / (s² + K_h·s + K_v)` are complementary on the true altitude signal. Don't collapse to one parameter.
-- **API mirrors `fusion-ahrs`.** Constructor: `new()` + `with_settings(s)`. Updates return `()`; results via `altitude()` / `vertical_velocity()` accessors — not a return-by-value `AltitudeEstimate` snapshot. Consistency with the sibling crate beats minor ergonomic wins.
+- **3rd-order complementary observer with three gains, not 2-state or 1st-order.** Output is altitude, velocity, *and* accel bias (three states). A 1st-order filter corrects only one state; velocity drifts with accel bias. A 2-state filter corrects altitude and velocity but parks at `+a_bias / K_v` steady-state altitude error. The 3-state observer identifies the bias as a state and drives steady-state altitude error to zero. Cascaded pole placement (position/velocity loop at `ω`, bias loop at `ω_b ≪ ω`) keeps the position-loop tuning intuition unchanged and the bias loop decoupled. Characteristic polynomial `s³ + K_h s² + K_v s + K_b`; Routh-Hurwitz `K_h · K_v > K_b`. Don't collapse to fewer states.
+- **API mirrors `fusion-ahrs`.** Constructor: `new()` + `with_settings(s)`. Updates return `()`; results via `altitude()` / `vertical_velocity()` / `accel_bias()` accessors — not a return-by-value snapshot. Consistency with the sibling crate beats minor ergonomic wins.
 - **Scalar `vertical_accel: f32` input, +up convention.** Caller extracts `.z` from `earth_acceleration()` and negates if using NED. Keeps this crate independent of a `Convention` enum.
-- **Reference handling: auto-zero on first sample, with explicit `reset(baro_altitude)` override.** Absolute altitude is meaningless without a reference; users get something working out of the box, with an escape hatch for known-ground starts.
+- **Reference handling: auto-zero on first sample, with explicit `reset(baro_altitude)` override.** Absolute altitude is meaningless without a reference; users get something working out of the box, with an escape hatch for known-ground starts. `reset()` preserves `accel_bias` — re-zeroing the altitude reference is unrelated to the physical sensor bias.
 
 ## Open Design Questions
-- Filter form: 2nd-order complementary filter (start here) vs. 2-state Kalman with explicit accel/baro noise models (later, if tuning needs are sensor-specific)
-- Whether to expose intermediate state (baro residual, ground reference) for diagnostics
-- Whether to accept `Vector3<f32>` + a `Convention` instead of a scalar `vertical_accel` (cleaner call site, adds `Convention` coupling)
+- Whether to expose a `set_accel_bias(b)` API for warm-starting from a stationary pre-flight calibration (currently the bias has to converge from 0 over ~10 s).
+- Filter form: keep 3rd-order complementary observer (current) vs. 3-state Kalman with explicit accel/baro noise models (later, if tuning needs become sensor-specific).
+- Whether to expose intermediate state (baro residual, ground reference) for diagnostics.
+- Whether to accept `Vector3<f32>` + a `Convention` instead of a scalar `vertical_accel` (cleaner call site, adds `Convention` coupling).
 
 ## Success Criteria
 - Drift-corrected altitude tracks truth within bounded error on synthetic + recorded data

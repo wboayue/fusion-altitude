@@ -1,6 +1,8 @@
 use super::*;
 
 const DT: f32 = 0.01;
+const TRUE_BIAS: f32 = 0.12;
+const CONVERGENCE_STEPS: usize = 2000;
 
 #[test]
 fn first_update_auto_zeroes_reference() {
@@ -76,9 +78,90 @@ fn constant_upward_accel_against_truthful_baro() {
 #[test]
 fn settings_default_is_well_damped() {
     let s = AltitudeSettings::default();
-    // ζ = K_h / (2 sqrt(K_v))
+    // Approximate effective damping of the position/velocity subsystem:
+    // ζ_eff ≈ K_h / (2 sqrt(K_v)). Exact only when bias_gain = 0, but the
+    // cascaded design keeps it close to the design value of 0.7.
     let zeta = s.position_gain / (2.0 * libm_sqrtf(s.velocity_gain));
     assert!(zeta > 0.5 && zeta < 1.0, "ζ={}", zeta);
+}
+
+#[test]
+fn settings_default_satisfies_routh_hurwitz() {
+    // Stability of s³ + K_h s² + K_v s + K_b requires K_h · K_v > K_b.
+    let s = AltitudeSettings::default();
+    assert!(
+        s.position_gain * s.velocity_gain > s.bias_gain,
+        "K_h·K_v={} not > K_b={}",
+        s.position_gain * s.velocity_gain,
+        s.bias_gain
+    );
+}
+
+#[test]
+fn estimates_constant_accel_bias_and_zeroes_altitude_error() {
+    // 2-state filter would park at +bias/K_v; 3-state observer must
+    // identify the bias and drive altitude error to zero.
+    let mut est = AltitudeEstimator::new();
+
+    for _ in 0..CONVERGENCE_STEPS {
+        est.update(TRUE_BIAS, 0.0, DT);
+    }
+
+    assert!(est.altitude().abs() < 0.01, "h={}", est.altitude());
+    assert!(
+        est.vertical_velocity().abs() < 0.01,
+        "v={}",
+        est.vertical_velocity()
+    );
+    assert!(
+        (est.accel_bias() - TRUE_BIAS).abs() < 0.01,
+        "b_hat={} true={}",
+        est.accel_bias(),
+        TRUE_BIAS
+    );
+}
+
+#[test]
+fn reset_preserves_accel_bias() {
+    // Bias is a physical sensor property, independent of the altitude
+    // reference frame. A converged estimate must survive a reset.
+    let mut est = AltitudeEstimator::new();
+    for _ in 0..CONVERGENCE_STEPS {
+        est.update(TRUE_BIAS, 0.0, DT);
+    }
+
+    let converged_bias = est.accel_bias();
+    assert!((converged_bias - TRUE_BIAS).abs() < 0.01);
+
+    est.reset(50.0);
+    assert_eq!(est.accel_bias(), converged_bias);
+    assert_eq!(est.altitude(), 50.0);
+    assert_eq!(est.vertical_velocity(), 0.0);
+}
+
+#[test]
+fn bias_gain_zero_recovers_two_state_filter() {
+    // bias_gain = 0 disables the bias loop; a constant accel bias
+    // must then park at +bias/K_v steady state, matching the original
+    // 2-state behavior.
+    let settings = AltitudeSettings {
+        bias_gain: 0.0,
+        ..AltitudeSettings::default()
+    };
+    let mut est = AltitudeEstimator::with_settings(settings);
+
+    for _ in 0..CONVERGENCE_STEPS {
+        est.update(TRUE_BIAS, 0.0, DT);
+    }
+
+    let expected_err = TRUE_BIAS / settings.velocity_gain;
+    assert!(
+        (est.altitude() - expected_err).abs() < 0.005,
+        "h={} expected≈{}",
+        est.altitude(),
+        expected_err
+    );
+    assert_eq!(est.accel_bias(), 0.0);
 }
 
 // tiny no_std-friendly sqrt for the damping check
