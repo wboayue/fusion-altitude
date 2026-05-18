@@ -1,6 +1,6 @@
 /// Tuning parameters for [`crate::AltitudeEstimator`].
 ///
-/// The two gains form a 2nd-order observer whose error dynamics have
+/// The two gains define the 2nd-order complementary filter's
 /// characteristic polynomial `s² + position_gain·s + velocity_gain`. A
 /// well-behaved response is obtained by choosing
 /// `position_gain = 2ζω` and `velocity_gain = ω²`, with damping `ζ ≈ 0.7`

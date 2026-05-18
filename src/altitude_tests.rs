@@ -35,7 +35,7 @@ fn stationary_converges_to_baro() {
 fn baro_drift_pulls_altitude() {
     let mut est = AltitudeEstimator::new();
     est.reset(0.0);
-    // Constant baro reading of 10 m with no accel — observer must
+    // Constant baro reading of 10 m with no accel — filter must
     // track the baro reference over time.
     for _ in 0..5000 {
         est.update(0.0, 10.0, DT);

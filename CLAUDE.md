@@ -1,6 +1,6 @@
 ## Objective
 
-A `no_std`-friendly altitude and vertical-velocity estimator that fuses barometric pressure with gravity-compensated vertical acceleration from an AHRS via a complementary filter, yielding drift-corrected altitude.
+A `no_std`-friendly altitude and vertical-velocity estimator that fuses barometric pressure with gravity-compensated vertical acceleration from an AHRS via a 2nd-order complementary filter, yielding drift-corrected altitude.
 
 Companion crate to [`fusion-ahrs`](https://github.com/wboayue/fusion-ahrs). Designed to consume the Earth-frame acceleration output from that library and combine it with a barometric altitude source.
 
@@ -37,7 +37,7 @@ src/
 
 ### Algorithm
 
-Two-state complementary observer (altitude + vertical velocity), semi-implicit Euler discretisation of `v̇ = a + K_v·(z - h)`, `ḣ = v + K_h·(z - h)`:
+2nd-order complementary filter, two states (altitude + vertical velocity). Semi-implicit Euler discretisation of `v̇ = a + K_v·(z - h)`, `ḣ = v + K_h·(z - h)`:
 
 ```text
 residual = baro_altitude - h
@@ -47,7 +47,7 @@ h += (v + position_gain * residual) * dt    # uses the just-updated v
 
 - The `dt` factor on the residual terms is required for dimensional correctness: `K_v` has units 1/s², residual is m, so `K_v * residual * dt` is m/s — the units of `v`.
 - Accel integrated twice (a → v → h); baro residual corrects **both** states, not just altitude
-- Two independent gains: `position_gain` (≈ 2ζω, units 1/s) and `velocity_gain` (≈ ω², units 1/s²) for a 2nd-order observer
+- Two independent gains: `position_gain` (≈ 2ζω, units 1/s) and `velocity_gain` (≈ ω², units 1/s²) define the 2nd-order complementary filter
 - One gain (single `alpha`) is **wrong** for this output shape — velocity needs its own correction path or it drifts with accel bias
 
 State: `altitude`, `velocity`, `reference_set` flag (auto-zero on first sample if `reset()` not called).
@@ -108,13 +108,13 @@ After any README edit run `cargo test --doc` before committing.
 ## Design Decisions (locked unless reopened)
 
 - **Separate crate, not a feature of `fusion-ahrs`.** `fusion-ahrs` deliberately tracks the upstream xioTechnologies C library (orientation only). Bundling baro/altitude in — even behind a cargo feature — would muddy that parity boundary and force altitude churn through the AHRS release cycle. Embedded users who only need orientation also keep a smaller surface.
-- **Two-state observer with two gains, not single-alpha complementary.** Output is altitude *and* velocity (two states). A 1-DoF complementary filter only corrects one state; velocity then drifts with accel bias. Two gains (`position_gain`, `velocity_gain`) are physically independent — they set the position and velocity time constants of a 2nd-order observer (`K_h = 2ζω`, `K_v = ω²`). Don't collapse to one parameter.
+- **2nd-order complementary filter with two gains, not single-alpha 1st-order.** Output is altitude *and* velocity (two states). A 1st-order complementary filter only corrects one state; velocity then drifts with accel bias. Two gains (`position_gain`, `velocity_gain`) are physically independent — they set the position and velocity time constants of the 2nd-order filter (`K_h = 2ζω`, `K_v = ω²`). The frequency-domain check passes: baro path `(K_h·s + K_v) / (s² + K_h·s + K_v)` and accel path `1 / (s² + K_h·s + K_v)` are complementary on the true altitude signal. Don't collapse to one parameter.
 - **API mirrors `fusion-ahrs`.** Constructor: `new()` + `with_settings(s)`. Updates return `()`; results via `altitude()` / `vertical_velocity()` accessors — not a return-by-value `AltitudeEstimate` snapshot. Consistency with the sibling crate beats minor ergonomic wins.
 - **Scalar `vertical_accel: f32` input, +up convention.** Caller extracts `.z` from `earth_acceleration()` and negates if using NED. Keeps this crate independent of a `Convention` enum.
 - **Reference handling: auto-zero on first sample, with explicit `reset(baro_altitude)` override.** Absolute altitude is meaningless without a reference; users get something working out of the box, with an escape hatch for known-ground starts.
 
 ## Open Design Questions
-- Filter form: 2-state complementary observer (start here) vs. 2-state Kalman with explicit accel/baro noise models (later, if tuning needs are sensor-specific)
+- Filter form: 2nd-order complementary filter (start here) vs. 2-state Kalman with explicit accel/baro noise models (later, if tuning needs are sensor-specific)
 - Whether to expose intermediate state (baro residual, ground reference) for diagnostics
 - Whether to accept `Vector3<f32>` + a `Convention` instead of a scalar `vertical_accel` (cleaner call site, adds `Convention` coupling)
 

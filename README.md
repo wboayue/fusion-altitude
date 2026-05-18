@@ -2,7 +2,7 @@
 
 # fusion-altitude
 
-A `no_std`-friendly altitude and vertical-velocity estimator that fuses barometric pressure with gravity-compensated vertical acceleration from an AHRS via a complementary filter, yielding drift-corrected altitude.
+A `no_std`-friendly altitude and vertical-velocity estimator that fuses barometric pressure with gravity-compensated vertical acceleration from an AHRS via a 2nd-order complementary filter, yielding drift-corrected altitude.
 
 Companion crate to [`fusion-ahrs`](https://github.com/wboayue/fusion-ahrs). Implements the altitude estimator proposed in [fusion-ahrs#27](https://github.com/wboayue/fusion-ahrs/issues/27).
 
@@ -14,7 +14,7 @@ Companion crate to [`fusion-ahrs`](https://github.com/wboayue/fusion-ahrs). Impl
 
 ## Algorithm
 
-Two-state complementary observer over altitude and vertical velocity, semi-implicit Euler discretisation of the continuous-time form `v̇ = a + K_v·(z - h)`, `ḣ = v + K_h·(z - h)`:
+2nd-order complementary filter with two states — altitude `h` and vertical velocity `v`. Semi-implicit Euler discretisation of the continuous-time form `v̇ = a + K_v·(z - h)`, `ḣ = v + K_h·(z - h)`:
 
 ```text
 residual = baro_altitude - h
@@ -66,7 +66,7 @@ loop {
 | `position_gain`  | `f32` | `1/s`  | `2.1`          | Feedback gain from baro residual into the altitude state. Larger → tighter tracking of baro, more baro noise visible in altitude. |
 | `velocity_gain`  | `f32` | `1/s²` | `2.25`         | Feedback gain from baro residual into the velocity state. Damps integrated-acceleration drift in `v`. Larger → faster velocity correction, more sensitivity to baro noise. |
 
-The two gains form a 2nd-order observer with characteristic polynomial `s² + position_gain·s + velocity_gain`. Pick `position_gain = 2ζω`, `velocity_gain = ω²` with damping `ζ ≈ 0.7` and bandwidth `ω` (rad/s). The defaults give `ω ≈ 1.5 rad/s` (~1 s settling) — fast enough for VTOL multirotor altitude-hold loops while rejecting prop-wash baro noise. Retune for slower platforms (balloons, fixed-wing) or noisier sensors.
+The two gains define the 2nd-order complementary filter's characteristic polynomial `s² + position_gain·s + velocity_gain`. Pick `position_gain = 2ζω`, `velocity_gain = ω²` with damping `ζ ≈ 0.7` and bandwidth `ω` (rad/s). The defaults give `ω ≈ 1.5 rad/s` (~1 s settling) — fast enough for VTOL multirotor altitude-hold loops while rejecting prop-wash baro noise. Retune for slower platforms (balloons, fixed-wing) or noisier sensors.
 
 ## Installation
 

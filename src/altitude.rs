@@ -1,8 +1,10 @@
 use crate::types::AltitudeSettings;
 
-/// Two-state complementary observer fusing vertical acceleration with
+/// 2nd-order complementary filter fusing vertical acceleration with
 /// barometric altitude to produce drift-corrected altitude and vertical
-/// velocity estimates.
+/// velocity estimates. The two filter states are altitude and vertical
+/// velocity; both are corrected by the baro residual through independent
+/// gains.
 ///
 /// # Example
 ///
@@ -73,7 +75,7 @@ impl AltitudeEstimator {
         let residual = baro_altitude - self.altitude;
 
         // Semi-implicit Euler: update v first, then h with the new v.
-        // Equivalent to the continuous-time observer
+        // Equivalent to the continuous-time 2nd-order complementary filter
         //   v̇ = a + K_v (z - h),  ḣ = v + K_h (z - h)
         // discretised symplectically.
         self.velocity += (vertical_accel + self.settings.velocity_gain * residual) * dt;
