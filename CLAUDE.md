@@ -75,7 +75,18 @@ let vz = altitude.vertical_velocity();
 ### Dependencies
 - **None** in the core crate. Algorithm is pure scalar `f32` arithmetic (`+`, `-`, `*`, `/`) — no transcendentals, no vector ops, no allocator. Keeps the dependency tree empty and the `no_std` story trivial.
 - Add `nalgebra` (with `libm` feature) only if a future public API takes/returns `Vector3<f32>`; otherwise resist.
-- Future dev-deps (when examples land): `criterion` for benches, `plotters` for visualisation.
+- Dev-deps: `criterion` (benches). When examples land, add `plotters` for visualisation.
+
+### Benchmarks
+
+`benches/altitude_benchmarks.rs` covers:
+
+- `update_steady_state` — hot-path `update()` cost after the auto-zero branch is settled.
+- `update_cold_first_sample` — first-call path (auto-zero branch).
+- `loop_100hz_10s` — 1000 sequential updates, representative of a 10 s control loop at 100 Hz.
+- `new_default` — construction overhead.
+
+Run with `cargo bench`. Use `cargo bench --bench altitude_benchmarks -- --quick` for fast sanity-check runs without the full criterion warmup. Reference numbers (Apple Silicon, release build): steady-state update ~10 ns, 1000-update loop ~7 µs.
 
 ### Code Quality Standards
 - Single-responsibility modules, minimal public API
