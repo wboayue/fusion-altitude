@@ -23,14 +23,16 @@ cargo run --example simple          # basic altitude fusion demo
 - **Output**: fused altitude (m) and vertical velocity (m/s)
 - **Compatibility**: `#![no_std]` (edition 2024)
 
-### Source Layout (planned)
+### Source Layout
 
 ```
 src/
-  lib.rs          – public API re-exports
-  altitude.rs     – AltitudeEstimator: new(), with_settings(), reset(),
-                    update(), altitude(), vertical_velocity()
-  types.rs        – AltitudeSettings
+  lib.rs                – public API re-exports, GRAVITY const
+  altitude.rs           – AltitudeEstimator: new(), with_settings(), reset(),
+                          update(), altitude(), vertical_velocity()
+  altitude_tests.rs     – unit tests for altitude.rs
+  types.rs              – AltitudeSettings
+  types_tests.rs        – unit tests for types.rs (when added)
 ```
 
 ### Algorithm
@@ -74,7 +76,13 @@ let vz = altitude.vertical_velocity();
 ### Code Quality Standards
 - Single-responsibility modules, minimal public API
 - Zero-cost abstractions, no heap allocation on the hot path
-- Inline unit tests in each module (`#[cfg(test)] mod tests`); integration tests in `tests/`
+- **Test file layout**: unit tests live in a **sibling file** next to the implementation (e.g. `altitude.rs` ↔ `altitude_tests.rs`), wired in via:
+  ```rust
+  #[cfg(test)]
+  #[path = "altitude_tests.rs"]
+  mod tests;
+  ```
+  Tests use `use super::*;` to reach the implementation. Integration tests still go in `tests/`. Do **not** nest `#[cfg(test)] mod tests { ... }` inline in the implementation file.
 - Rustdoc on all public APIs with examples
 
 ## Development Guidelines
